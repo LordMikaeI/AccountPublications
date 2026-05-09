@@ -1,0 +1,109 @@
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
+using Kursach_Backend.Models.Users;
+using Newtonsoft.Json;
+using Kursach_Backend.DbContexts;
+using Kursach_Backend.Utils;
+using Kursach_Backend.Models.DTO;
+
+namespace Kursach_Backend.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class AuthController : ControllerBase
+    {
+        private ApplicationContext _context;
+
+        public AuthController()
+        {
+            _context = new ApplicationContext();
+        }
+
+        [HttpPost("/register")]
+        public IActionResult Register([FromBody] RegisterRequestDto registerRequest)
+        {
+            var user = _context.Users.FirstOrDefault(u => u.Login == registerRequest.Login);
+            if (user != null)
+                return BadRequest("User with this login already exist");
+
+            var validPositions = new Dictionary<string, string>
+            {
+                { "Заведующий кафедрой", "admin" },
+                { "Профессор", "manager" },
+                { "Доцент", "manager" },
+                { "Старший преподаватель", "user" },
+                { "Ассистент", "user" },
+                { "Лаборант", "user" }
+            };
+
+            if (!validPositions.ContainsKey(registerRequest.Position))
+                return BadRequest("Неверная должность. Доступные: " + string.Join(", ", validPositions.Keys));
+
+            var role = validPositions[registerRequest.Position];
+
+            _context.Users.Add(new User
+            {
+                Login = registerRequest.Login,
+                Password = AuthUtils.HashPassword(registerRequest.Password),
+                Role = role,
+                Position = registerRequest.Position
+            });
+
+            _context.SaveChanges();
+            return Ok();
+        }
+
+        [HttpPost("/login")]
+        public IActionResult Login([FromBody] LoginRequestDto loginRequest)
+        {
+            var identity = GetIdentity(loginRequest.Login, loginRequest.Password);
+            if (identity == null)
+            {
+                return BadRequest(new { errorText = "Invalid username or password!" });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Login == loginRequest.Login);
+
+            var now = DateTime.UtcNow;
+
+            var jwt = new JwtSecurityToken(
+                issuer: AuthOptions.ISSUER,
+                audience: AuthOptions.AUDIENCE,
+                notBefore: now,
+                claims: identity.Claims,
+                expires: now.Add(TimeSpan.FromMinutes(AuthOptions.LIFETIME)),
+                signingCredentials: new SigningCredentials(AuthOptions.GetSymmetricSecurityKey(), SecurityAlgorithms.HmacSha256));
+            var encodedJwt = new JwtSecurityTokenHandler().WriteToken(jwt);
+
+            var response = new
+            {
+                access_token = encodedJwt,
+                username = identity.Name,
+                role = identity.Claims.FirstOrDefault(c => c.Type.Contains("role"))?.Value,
+                position = user?.Position
+            };
+
+            return Ok(JsonConvert.SerializeObject(response));
+        }
+
+        private ClaimsIdentity GetIdentity(string username, string password)
+        {
+            var user = _context.Users.FirstOrDefault(u => u.Login == username);
+            if (user == null || !AuthUtils.VerifyPassword(password, user.Password))
+            {
+                return null;
+            }
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimsIdentity.DefaultNameClaimType, user.Login),
+                new Claim(ClaimsIdentity.DefaultRoleClaimType, user.Role),
+            };
+
+            var claimsIdentity = new ClaimsIdentity(claims, "Token", ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+            return claimsIdentity;
+        }
+    }
+}
