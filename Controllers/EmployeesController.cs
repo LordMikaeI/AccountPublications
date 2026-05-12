@@ -89,18 +89,17 @@ namespace Kursach_Backend.Controllers
         }
 
         [HttpPut("employee")]
-        [Authorize(Roles = "admin, manager")]
-        public IActionResult UpdateEmployee([FromBody] Employee employee)
+        public IActionResult UpdateEmployee([FromBody] EmployeeRequestDto employeeDto, int id)
         {
-            var _employee = _context.Employees.FirstOrDefault(e => e.Id == employee.Id);
+            var _employee = _context.Employees.FirstOrDefault(e => e.Id == id);
             if (_employee != null)
             {
-                _employee.BirthDate = employee.BirthDate;
-                _employee.Email = employee.Email;
-                _employee.FirstName = employee.FirstName;
-                _employee.LastName = employee.LastName;
-                _employee.MidleName = employee.MidleName;
-                _employee.PhoneNumber = employee.PhoneNumber;
+                _employee.BirthDate = employeeDto.BirthDate;
+                _employee.Email = employeeDto.Email;
+                _employee.FirstName = employeeDto.FirstName;
+                _employee.LastName = employeeDto.LastName;
+                _employee.MidleName = employeeDto.MidleName;
+                _employee.PhoneNumber = employeeDto.PhoneNumber;
                 _context.SaveChanges();
                 return Ok();
             }

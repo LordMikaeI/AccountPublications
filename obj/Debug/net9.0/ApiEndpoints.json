@@ -72,9 +72,14 @@
     "Order": 0,
     "Parameters": [
       {
-        "Name": "employee",
-        "Type": "Kursach_Backend.Models.Employees.Employee",
+        "Name": "employeeDto",
+        "Type": "Kursach_Backend.Models.DTO.EmployeeRequestDto",
         "IsRequired": true
+      },
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": false
       }
     ],
     "ReturnTypes": []
